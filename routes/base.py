@@ -1,0 +1,15 @@
+from fastapi import FastAPI,APIRouter
+import os
+
+base_router = APIRouter(prefix="/api/v1", tags=["base"])
+
+@base_router.get("/")
+
+def welcome():
+    app_version = os.getenv("APP_VERSION")
+    app_name = os.getenv("APP_NAME")
+    return {
+        "app_name": app_name,
+        "app_version": app_version
+    }
+
