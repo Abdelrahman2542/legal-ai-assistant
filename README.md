@@ -7,13 +7,16 @@
 
 ## Installation
 
-### 1. Create the Virtual Environment (venv)
+### 1. Create and Activate the Virtual Environment (venv)
 ```bash
 python -m venv .venv
+.venv\Scripts\activate
 ```
 ### 1. Install the required packages
 ```bash
+cd src
 pip install -r requirements.txt
+
 ```
 ### Setup the environment variables
 ```bash

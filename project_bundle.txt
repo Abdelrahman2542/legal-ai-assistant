@@ -1,3 +1,5 @@
+
+--- FILE: .\.gitignore ---
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -218,3 +220,132 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Custom local bundle & helper files
+project_bundle.txt
+bundle.py
+
+--- FILE: .\README.md ---
+# legal-ai-assistant
+
+## Requirements 
+- Python `3.13.5`
+
+---
+
+## Installation
+
+### 1. Create and Activate the Virtual Environment (venv)
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+### 1. Install the required packages
+```bash
+cd src
+pip install -r requirements.txt
+
+```
+### Setup the environment variables
+```bash
+copy .env.example .env
+```
+Set your environment variables in the .env file. Like OPENAI_API_KEY value
+
+### Run fast api server
+```bash
+uvicorn main:app --reload
+```
+--- FILE: .\data\corrections.json ---
+
+--- FILE: .\src\.env ---
+APP_NAME="Legal AI Assistant"
+APP_VERSION="0.1"
+OPENAI_API_KEY="sk-1521xc"
+
+--- FILE: .\src\.env.example ---
+APP_NAME="Legal AI Assistant"
+APP_VERSION="0.1"
+OPENAI_API_KEY=""
+
+
+
+--- FILE: .\src\config.py ---
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    APP_NAME: str
+    APP_VERSION: str
+    OPENAI_API_KEY: str = ""  # خليناه اختياري لحد ما تحسموا الـ LLM
+
+    model_config = SettingsConfigDict(env_file=".env")
+
+def get_settings():
+    return Settings()
+--- FILE: .\src\main.py ---
+from fastapi import FastAPI
+
+
+
+from api.routes import base
+
+
+
+app = FastAPI()
+
+app.include_router(base.base_router)
+
+--- FILE: .\src\requirements.txt ---
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+python-multipart==0.0.33
+python-dotenv== 1.2.4
+pydantic-settings==2.16.2 
+
+
+
+--- FILE: .\src\api\schemas.py ---
+
+--- FILE: .\src\api\controllers\BaseController.py ---
+
+--- FILE: .\src\api\controllers\DataController.py ---
+
+--- FILE: .\src\api\controllers\ProjectController.py ---
+
+--- FILE: .\src\api\controllers\__init__.py ---
+
+--- FILE: .\src\api\enums\ResponseEnum.py ---
+
+--- FILE: .\src\api\enums\__init__.py ---
+
+--- FILE: .\src\api\helpers\__init__.py ---
+
+--- FILE: .\src\api\routes\base.py ---
+from fastapi import FastAPI, APIRouter, Depends
+import os
+from config import get_settings, Settings
+
+base_router = APIRouter(
+    prefix="/api/v1",
+    tags=["api_v1"],
+)
+
+@base_router.get("/")
+async def welcome(app_settings: Settings = Depends(get_settings)):
+
+    app_name = app_settings.APP_NAME
+    app_version = app_settings.APP_VERSION
+
+    return {
+        "app_name": app_name,
+        "app_version": app_version,
+    }
+--- FILE: .\src\api\routes\__init__.py ---
+
+--- FILE: .\src\assets\.gitignore ---
+files
+--- FILE: .\src\generation\__init__.py ---
+
+--- FILE: .\src\ingestion\__init__.py ---
+
+--- FILE: .\src\retrieval\__init__.py ---
