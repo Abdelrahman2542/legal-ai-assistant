@@ -1,106 +1,86 @@
+import os
 import json
-import re
-import unicodedata
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+# تحديد المسارات حسب هيكل مشروعك
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
-LAW = {
-    "law_id": "labor_2025",
-    "law_name": "قانون العمل",
-    "law_number": "14 لسنة 2025",
-    "source": "الجريدة الرسمية - قانون العمل 2025",
-}
+STAGED_DIR = os.path.join(DATA_DIR, "staging", "labor law")
+PROCESS_DIR = os.path.join(DATA_DIR, "processed", "labor law")
 
-DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+def chunk_labor_law():
+    input_path = os.path.join(STAGED_DIR, "extracted_clean.txt")
+    
+    print(f"🔍 البحث عن ملف الـ staged في مسار: {input_path}")
+    
+    if not os.path.exists(input_path):
+        print(f"❌ خطأ: ملف الـ staged غير موجود في هذا المسار: {input_path}")
+        print("💡 من فضلك شغّل cleaner.py أولاً لاستخراج النص الخام.")
+        return
 
-ORDINALS = {
-    "الأولى": 1, "الاولى": 1, "الثانية": 2, "الثالثة": 3, "الرابعة": 4,
-    "الخامسة": 5, "السادسة": 6, "السابعة": 7, "الثامنة": 8,
-    "التاسعة": 9, "العاشرة": 10,
-}
-_ORD = "|".join(sorted(ORDINALS, key=len, reverse=True))
-_SEP = r"[\s()\[\]]*"          # مسافات وأقواس بأي اتجاه
+    # التأكد من وجود مجلد processed/labor law
+    os.makedirs(PROCESS_DIR, exist_ok=True)
 
-HEADER_RE = re.compile(
-    rf"^{_SEP}(?:ال)?مادة{_SEP}(\d+|{_ORD}){_SEP}"
-    rf"(مكرر(?:[\s()]*[أ-ي][\s()]*)?)?\s*[:\-–.]?\s*(.*)$"
-)
-# سطر بيبدأ بـ "المادة 45 من هذا القانون..." ده إحالة جوه نص، مش عنوان
-REFERENCE_START = re.compile(r"^(من|في|أو|و|فيما|بشأن)\s")
+    print("📖 جاري قراءة النص المستخرج وتقسيمه إلى مواد بالطريقة الذكية...")
+    with open(input_path, "r", encoding="utf-8") as f:
+        full_text = f.read()
 
+    lines = full_text.split('\n')
 
-def normalize(text: str) -> str:
-    return unicodedata.normalize("NFKC", text).translate(DIGITS)
+    chunks = []
+    current_article_title = "مقدمة"
+    current_article_content = ""
+    article_counter = 1
 
+    for line in lines:
+        stripped_line = line.strip()
 
-def parse_header(line: str):
-    m = HEADER_RE.match(line)
-    if not m:
-        return None
-    label, suffix, rest = m.group(1), (m.group(2) or "").strip(), m.group(3).strip()
-    if REFERENCE_START.match(rest):
-        return None
-    number = ORDINALS.get(label) or int(label)
-    return number, suffix, rest
+        # شروط بداية المادة بدقة للتأكد من التقسيم السليم
+        is_new_article = (
+            stripped_line.startswith("مادة") or
+            stripped_line.startswith("المادة") or
+            stripped_line.startswith("ﻣﺎﺩﺓ") or
+            stripped_line.startswith("ﺍﳌﺎﺩﺓ") or
+            stripped_line.startswith("مادة)") or
+            stripped_line.startswith("ﻣﺎﺩﺓ)")
+        )
 
+        if is_new_article:
+            # لو فيه مادة قديمة متجمعة، نحفظها كـ Dict منظم
+            if current_article_content.strip():
+                chunk_data = {
+                    "chunk_id": f"labor_art_{article_counter}",
+                    "article_title": current_article_title,
+                    "section": "issuance" if "إصدار" in current_article_content[:200] else "main_law",
+                    "content": current_article_content.strip()
+                }
+                chunks.append(chunk_data)
+                article_counter += 1
 
-def chunk_law(text: str, law: dict):
-    articles, preamble = [], []
-    current, section, last_number = None, 0, None
-
-    for line in text.splitlines():
-        h = parse_header(line)
-        if h:
-            number, suffix, rest = h
-            if number == 1 and not suffix and last_number is not None:
-                section += 1          # الترقيم بدأ من 1 تاني (إصدار ← القانون نفسه)
-            last_number = number
-            current = {**law, "section": section, "article_number": number,
-                       "article_suffix": suffix, "header": line.strip(),
-                       "lines": [rest] if rest else []}
-            articles.append(current)
-        elif current:
-            current["lines"].append(line)
+            # نبدأ مادة جديدة
+            current_article_title = stripped_line
+            current_article_content = ""
         else:
-            preamble.append(line)
+            # نجمع محتوى السطور جوه نفس المادة الحالية
+            current_article_content += line + "\n"
 
-    for i, a in enumerate(articles):
-        a["text"] = "\n".join(a.pop("lines")).strip()
-        suf = "_" + a["article_suffix"].replace(" ", "") if a["article_suffix"] else ""
-        a["chunk_id"] = f"{a['law_id']}_s{a['section']}_{a['article_number']}{suf}_{i}"
-    return articles, preamble
+    # إضافة آخر مادة في الملف
+    if current_article_content.strip():
+        chunk_data = {
+            "chunk_id": f"labor_art_{article_counter}",
+            "article_title": current_article_title,
+            "section": "issuance" if "إصدار" in current_article_content[:200] else "main_law",
+            "content": current_article_content.strip()
+        }
+        chunks.append(chunk_data)
 
+    # حفظ النتائج في ملف JSON
+    output_json_path = os.path.join(PROCESS_DIR, "chunks.json")
+    with open(output_json_path, "w", encoding="utf-8") as f:
+        json.dump(chunks, f, ensure_ascii=False, indent=4)
 
-def validate(articles):
-    empty, breaks, prev = [], [], None
-    for a in articles:
-        if len(a["text"]) < 10:
-            empty.append((a["section"], a["article_number"]))
-        if not a["article_suffix"]:
-            n = a["article_number"]
-            if prev is not None and n not in (prev + 1, 1):
-                breaks.append((prev, n))
-            prev = n
-    return {"count": len(articles), "empty_text": empty, "sequence_breaks": breaks}
-
+    print(f"✅ تم بنجاح تقسيم القانون إلى {len(chunks)} مادة/تشانك!")
+    print(f"💾 تم حفظ التشانكات في: {output_json_path}")
 
 if __name__ == "__main__":
-    src = ROOT / "data/staging/cleaned_labor.txt"
-    out = ROOT / "data/processed/labor_2025.json"
-    if not src.exists():
-        raise SystemExit(f"❌ ملف المصدر مش موجود: {src.resolve()}")
-
-    raw = src.read_text(encoding="utf-8")
-    articles, preamble = chunk_law(normalize(raw), LAW)
-    report = validate(articles)
-
-    if not articles:
-        raise SystemExit("❌ مفيش ولا مادة اتلقطت. راجع شكل العناوين في الملف.")
-
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(articles, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"حجم الملف: {len(raw)} حرف | عدد المواد: {report['count']}")
-    print(f"سطور قبل أول مادة: {len(preamble)}")
-    print(f"نص فاضي/قصير: {report['empty_text']}")
-    print(f"قفزات الترقيم: {report['sequence_breaks']}")
+    chunk_labor_law()

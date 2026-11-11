@@ -2,7 +2,7 @@ import os
 
 output_file = "project_bundle.txt"
 # أضف هنا الصيغ أو الفولدرات اللي حابب تستثنيها
-exclude_dirs = {".venv", ".git", "__pycache__", "node_modules"}
+exclude_dirs = {".venv", ".git","data","__pycache__", "node_modules"}
 exclude_extensions = {".png", ".jpg", ".jpeg", ".exe", ".zip", ".pdf"}
 
 with open(output_file, "w", encoding="utf-8") as outfile:
